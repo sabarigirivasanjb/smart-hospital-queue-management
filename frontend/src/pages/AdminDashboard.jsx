@@ -187,6 +187,161 @@ function AddDoctorForm({ onAdded }) {
   );
 }
 
+// ── Departments Manager ────────────────────────────────────────────────────────
+const DEPT_ICONS = { CARD:'❤️', EMRG:'🚨', NEUR:'🧠', ORTH:'🦴', GENM:'🩺', PEDI:'👶', DERM:'🫧', OPHT:'👁️' };
+
+function DepartmentsManager() {
+  const [depts, setDepts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ name: '', code: '', description: '' });
+  const [saving, setSaving] = useState(false);
+
+  const load = async () => {
+    try {
+      const r = await adminAPI.getDepartments();
+      setDepts(r.data);
+    } catch (e) {
+      toast.error('Failed to load departments');
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    if (!form.name || !form.code) { toast.error('Name and Code are required'); return; }
+    setSaving(true);
+    try {
+      await adminAPI.createDepartment({ ...form, is_active: true });
+      toast.success(`Department "${form.name}" added! ✅`);
+      setForm({ name: '', code: '', description: '' });
+      setShowAdd(false);
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to add department');
+    }
+    setSaving(false);
+  };
+
+  const handleToggle = async (dept) => {
+    try {
+      await adminAPI.toggleDepartment(dept.id);
+      toast.success(`${dept.name} ${dept.is_active ? 'deactivated' : 'activated'}`);
+      load();
+    } catch {
+      toast.error('Toggle failed');
+    }
+  };
+
+  if (loading) return <div className="loading-overlay"><div className="loading-spinner" /><p>Loading departments…</p></div>;
+
+  return (
+    <div className="animate-fade-up">
+      <div className="page-header" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:12 }}>
+        <div>
+          <h1>🏢 Departments</h1>
+          <p>{depts.length} departments · {depts.filter(d=>d.is_active).length} active</p>
+        </div>
+        <button className="btn btn-primary" onClick={() => setShowAdd(s => !s)}>
+          {showAdd ? '✕ Cancel' : '➕ Add Department'}
+        </button>
+      </div>
+
+      {/* Add Form */}
+      {showAdd && (
+        <div className="card mb-lg" style={{ borderColor: 'var(--color-primary)', borderLeft: '4px solid var(--color-primary)' }}>
+          <h4 className="mb-md">➕ New Department</h4>
+          <form onSubmit={handleAdd} style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:16 }}>
+            <div className="form-group">
+              <label className="form-label">DEPARTMENT NAME *</label>
+              <input className="form-input" placeholder="e.g. Radiology" value={form.name}
+                onChange={e => setForm(f=>({...f, name: e.target.value}))} required />
+            </div>
+            <div className="form-group">
+              <label className="form-label">CODE * (4 letters)</label>
+              <input className="form-input" placeholder="e.g. RADI" maxLength={6} value={form.code}
+                onChange={e => setForm(f=>({...f, code: e.target.value.toUpperCase()}))} required />
+            </div>
+            <div className="form-group">
+              <label className="form-label">DESCRIPTION</label>
+              <input className="form-input" placeholder="Brief description" value={form.description}
+                onChange={e => setForm(f=>({...f, description: e.target.value}))} />
+            </div>
+            <div style={{ gridColumn:'1/-1' }}>
+              <button type="submit" className="btn btn-primary" disabled={saving}>
+                {saving ? <span className="loading-spinner" /> : '💾'} Save Department
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Department Cards Grid */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px,1fr))', gap:16 }}>
+        {depts.map(dept => (
+          <div key={dept.id} className="card" style={{
+            borderLeft: `4px solid ${dept.is_active ? 'var(--color-success)' : 'var(--color-danger)'}`,
+            opacity: dept.is_active ? 1 : 0.65,
+            transition: 'all 0.2s',
+          }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+              <div style={{ fontSize:'2rem' }}>{DEPT_ICONS[dept.code] || '🏥'}</div>
+              <span className={`badge ${dept.is_active ? 'badge-active' : 'badge-completed'}`}>
+                {dept.is_active ? '🟢 Active' : '🔴 Inactive'}
+              </span>
+            </div>
+            <div style={{ marginTop:10 }}>
+              <div style={{ fontWeight:700, fontSize:'1.05rem', color:'var(--text-primary)' }}>{dept.name}</div>
+              <div style={{ marginTop:4 }}>
+                <span className="chip" style={{ fontSize:'0.72rem', padding:'2px 8px' }}>{dept.code}</span>
+              </div>
+              {dept.description && (
+                <div style={{ marginTop:8, fontSize:'0.82rem', color:'var(--text-muted)', lineHeight:1.4 }}>
+                  {dept.description}
+                </div>
+              )}
+            </div>
+            <div style={{ marginTop:14, display:'flex', gap:8 }}>
+              <button
+                onClick={() => handleToggle(dept)}
+                className={`btn btn-sm ${dept.is_active ? 'btn-ghost' : 'btn-primary'}`}
+                style={{ flex:1, fontSize:'0.78rem' }}
+              >
+                {dept.is_active ? '⏸ Deactivate' : '▶ Activate'}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Summary Table */}
+      <div className="card mt-lg">
+        <h4 className="mb-md">📋 Department Summary</h4>
+        <div className="table-container">
+          <table>
+            <thead>
+              <tr><th>#</th><th>Name</th><th>Code</th><th>Description</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              {depts.map((d, i) => (
+                <tr key={d.id}>
+                  <td style={{ color:'var(--text-muted)' }}>{i+1}</td>
+                  <td><div style={{ fontWeight:600, color:'var(--text-primary)' }}>{DEPT_ICONS[d.code]||'🏥'} {d.name}</div></td>
+                  <td><span className="chip">{d.code}</span></td>
+                  <td className="text-muted text-sm">{d.description || '—'}</td>
+                  <td><span className={`badge ${d.is_active ? 'badge-active' : 'badge-completed'}`}>{d.is_active ? '🟢 Active' : '🔴 Inactive'}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── MAIN ADMIN DASHBOARD ───────────────────────────────────────────────────────
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('analytics');

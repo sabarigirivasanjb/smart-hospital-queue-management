@@ -1,10 +1,12 @@
 import axios from 'axios';
 
-const BASE_URL = '/api/v1';   // uses Vite proxy → 127.0.0.1:8000
+// Direct backend URL — no proxy, always works
+const BASE_URL = 'http://127.0.0.1:8000/api/v1';
 
 const api = axios.create({
   baseURL: BASE_URL,
   timeout: 15000,
+  headers: { 'Content-Type': 'application/json' },
 });
 
 // Attach JWT token to every request

@@ -138,7 +138,7 @@ def get_queue_status(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_role("patient")),
 ):
-    """Get live queue position and estimated wait time for an appointment."""
+    """Get live queue position and estimated wait time — priority-aware."""
     appointment = db.query(models.Appointment).filter(
         models.Appointment.id == appointment_id,
         models.Appointment.patient_id == current_user.id,
@@ -146,18 +146,31 @@ def get_queue_status(
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
 
-    # Count patients ahead
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    ahead_count = (
+
+    # Get all active/scheduled appointments for this doctor today, ordered by priority
+    all_queue = (
         db.query(models.Appointment)
         .filter(
             models.Appointment.doctor_id == appointment.doctor_id,
             models.Appointment.status.in_(["scheduled", "active"]),
-            models.Appointment.queue_position < appointment.queue_position,
             models.Appointment.appointment_time >= today_start,
         )
-        .count()
+        .order_by(
+            models.Appointment.priority_score.desc(),   # CRITICAL first
+            models.Appointment.appointment_time.asc(),  # then by arrival time
+        )
+        .all()
     )
+
+    # Find this patient's real position in priority-sorted queue
+    real_position = 1
+    ahead_count = 0
+    for idx, appt in enumerate(all_queue):
+        if appt.id == appointment_id:
+            real_position = idx + 1
+            ahead_count = idx
+            break
 
     doctor = db.query(models.Doctor).filter(
         models.Doctor.id == appointment.doctor_id
@@ -165,7 +178,7 @@ def get_queue_status(
 
     now = datetime.now(timezone.utc)
     predicted_wait = wait_time_predictor.predict(
-        queue_position=appointment.queue_position or 1,
+        queue_position=real_position,
         waiting_count=ahead_count + 1,
         avg_consult_time=doctor.avg_consultation_minutes if doctor else 15,
         hour_of_day=now.hour,
@@ -176,7 +189,7 @@ def get_queue_status(
 
     return PatientQueueStatus(
         appointment_id=appointment_id,
-        queue_position=appointment.queue_position or 1,
+        queue_position=real_position,
         patients_ahead=ahead_count,
         predicted_wait_minutes=predicted_wait,
         priority_level=appointment.priority_level,
@@ -208,36 +221,7 @@ async def submit_triage(
     appointment.priority_score = risk_score
     appointment.priority_level = priority_level
 
-    # If CRITICAL: move to front of queue (position 1)
-    if priority_level == models.PriorityLevel.critical:
-        appointment.queue_position = 1
-        # Send emergency alert to doctor's department
-        doctor = db.query(models.Doctor).filter(
-            models.Doctor.id == appointment.doctor_id
-        ).first()
-        if doctor:
-            await ws_manager.broadcast_to_department(
-                doctor.department_id,
-                {
-                    "type": "emergency_alert",
-                    "patient_name": current_user.full_name,
-                    "patient_id": current_user.id,
-                    "appointment_id": appointment_id,
-                    "risk_score": risk_score,
-                    "priority_level": priority_level.value,
-                    "message": f"🚨 CRITICAL patient {current_user.full_name} needs immediate attention!",
-                },
-            )
-        # Notify the patient
-        notification = models.Notification(
-            user_id=current_user.id,
-            title="🚨 Critical Priority Assigned",
-            message=message,
-            notification_type="emergency",
-        )
-        db.add(notification)
-
-    # Save triage record
+    # Save triage record first
     triage_record = models.EmergencyTriage(
         patient_id=current_user.id,
         appointment_id=appointment_id,
@@ -246,6 +230,58 @@ async def submit_triage(
         priority_level=priority_level,
     )
     db.add(triage_record)
+    db.flush()  # flush so priority_score is set before we re-sort
+
+    # ── RECALCULATE ALL queue positions for this doctor (priority-aware) ──
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    all_queue = (
+        db.query(models.Appointment)
+        .filter(
+            models.Appointment.doctor_id == appointment.doctor_id,
+            models.Appointment.status.in_(["scheduled", "active"]),
+            models.Appointment.appointment_time >= today_start,
+        )
+        .order_by(
+            models.Appointment.priority_score.desc(),   # CRITICAL first
+            models.Appointment.appointment_time.asc(),  # then arrival time
+        )
+        .all()
+    )
+    for idx, appt in enumerate(all_queue):
+        appt.queue_position = idx + 1  # 1-indexed
+
+    # If CRITICAL: send emergency alert to doctor's department
+    if priority_level == models.PriorityLevel.critical:
+        doctor_obj = db.query(models.Doctor).filter(
+            models.Doctor.id == appointment.doctor_id
+        ).first()
+        if doctor_obj:
+            import asyncio
+            try:
+                asyncio.get_event_loop().run_until_complete(
+                    ws_manager.broadcast_to_department(
+                        doctor_obj.department_id,
+                        {
+                            "type": "emergency_alert",
+                            "patient_name": current_user.full_name,
+                            "patient_id": current_user.id,
+                            "appointment_id": appointment_id,
+                            "risk_score": risk_score,
+                            "priority_level": priority_level.value,
+                            "message": f"🚨 CRITICAL patient {current_user.full_name} needs immediate attention!",
+                        },
+                    )
+                )
+            except Exception:
+                pass
+        notification = models.Notification(
+            user_id=current_user.id,
+            title="🚨 Critical Priority Assigned",
+            message=message,
+            notification_type="emergency",
+        )
+        db.add(notification)
+
     db.commit()
     db.refresh(appointment)
 
