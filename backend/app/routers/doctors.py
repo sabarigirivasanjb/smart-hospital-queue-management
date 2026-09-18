@@ -9,6 +9,8 @@ from ..schemas import AppointmentOut, QueueStateOut
 from ..auth import require_role
 from ..utils.websocket import ws_manager
 from ..utils.sms_service import send_sms, sms_your_turn, sms_queue_update
+from ..utils.time import local_day_bounds_utc
+from ..utils.queue import refresh_doctor_queue
 
 router = APIRouter(prefix="/doctors", tags=["Doctors"])
 
@@ -25,8 +27,8 @@ def get_todays_schedule(
     if not doctor:
         raise HTTPException(status_code=404, detail="Doctor profile not found")
 
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    today_end = today_start + timedelta(days=1)
+    today_start, today_end = local_day_bounds_utc()
+    refresh_doctor_queue(db, doctor.id, today_start, today_end)
 
     appointments = (
         db.query(models.Appointment)
@@ -107,13 +109,15 @@ async def call_next_patient(
 
     # ── SMS: "You're Almost Next!" to patient at position #2 ─────────────────
     try:
-        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start, today_end = local_day_bounds_utc()
+        refresh_doctor_queue(db, doctor.id, today_start, today_end)
         next_up = (
             db.query(models.Appointment)
             .filter(
                 models.Appointment.doctor_id == doctor.id,
                 models.Appointment.status == models.AppointmentStatus.scheduled,
                 models.Appointment.appointment_time >= today_start,
+                models.Appointment.appointment_time < today_end,
             )
             .order_by(
                 models.Appointment.priority_score.desc(),
@@ -224,13 +228,15 @@ async def complete_appointment(
 
     # ── SMS: Alert next waiting patient that consultation is done ─────────────
     try:
-        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start, today_end = local_day_bounds_utc()
+        refresh_doctor_queue(db, doctor.id, today_start, today_end)
         upcoming = (
             db.query(models.Appointment)
             .filter(
                 models.Appointment.doctor_id == doctor.id,
                 models.Appointment.status == models.AppointmentStatus.scheduled,
                 models.Appointment.appointment_time >= today_start,
+                models.Appointment.appointment_time < today_end,
             )
             .order_by(
                 models.Appointment.priority_score.desc(),

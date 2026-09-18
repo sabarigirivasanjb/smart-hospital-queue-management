@@ -16,6 +16,8 @@ from ..ai.triage_ai import triage_ai
 from ..ai.wait_time_model import wait_time_predictor
 from ..ai.scheduler import recommend_slots
 from ..utils.websocket import ws_manager
+from ..utils.time import local_day_bounds_utc
+from ..utils.queue import refresh_doctor_queue
 
 router = APIRouter(prefix="/patients", tags=["Patients"])
 
@@ -49,8 +51,7 @@ async def book_appointment(
         raise HTTPException(status_code=404, detail="Doctor not found or unavailable")
 
     # Determine queue position
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    today_end = today_start + timedelta(days=1)
+    today_start, today_end = local_day_bounds_utc()
     queue_count = (
         db.query(models.Appointment)
         .filter(
@@ -87,19 +88,24 @@ async def book_appointment(
         symptoms_description=appointment_data.symptoms_description,
     )
     db.add(appointment)
+    db.flush()
+    queue = refresh_doctor_queue(db, doctor.id, today_start, today_end)
+    queue_position = appointment.queue_position
 
     # Update queue state
     queue_state = db.query(models.QueueState).filter(
         models.QueueState.doctor_id == doctor.id
     ).first()
     if queue_state:
-        queue_state.waiting_count = queue_position
+        queue_state.waiting_count = sum(
+            item.status == models.AppointmentStatus.scheduled for item in queue
+        )
         queue_state.avg_wait_time_predicted = predicted_wait
     else:
         new_qs = models.QueueState(
             department_id=doctor.department_id,
             doctor_id=doctor.id,
-            waiting_count=queue_position,
+            waiting_count=1,
             avg_wait_time_predicted=predicted_wait,
         )
         db.add(new_qs)
@@ -146,7 +152,8 @@ def get_queue_status(
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
 
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start, today_end = local_day_bounds_utc()
+    refresh_doctor_queue(db, appointment.doctor_id, today_start, today_end)
 
     # Get all active/scheduled appointments for this doctor today, ordered by priority
     all_queue = (
@@ -155,6 +162,7 @@ def get_queue_status(
             models.Appointment.doctor_id == appointment.doctor_id,
             models.Appointment.status.in_(["scheduled", "active"]),
             models.Appointment.appointment_time >= today_start,
+            models.Appointment.appointment_time < today_end,
         )
         .order_by(
             models.Appointment.priority_score.desc(),   # CRITICAL first
@@ -233,13 +241,15 @@ async def submit_triage(
     db.flush()  # flush so priority_score is set before we re-sort
 
     # ── RECALCULATE ALL queue positions for this doctor (priority-aware) ──
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start, today_end = local_day_bounds_utc()
+    refresh_doctor_queue(db, appointment.doctor_id, today_start, today_end)
     all_queue = (
         db.query(models.Appointment)
         .filter(
             models.Appointment.doctor_id == appointment.doctor_id,
             models.Appointment.status.in_(["scheduled", "active"]),
             models.Appointment.appointment_time >= today_start,
+            models.Appointment.appointment_time < today_end,
         )
         .order_by(
             models.Appointment.priority_score.desc(),   # CRITICAL first

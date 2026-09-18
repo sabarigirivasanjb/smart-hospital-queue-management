@@ -72,6 +72,12 @@ function TriageForm({ appointmentId, onComplete }) {
   };
 
   const handleSubmit = async () => {
+    // Guard: must have a valid appointment
+    if (!appointmentId) {
+      toast.error('❌ No appointment found. Please book an appointment first!');
+      return;
+    }
+
     const errs = {};
     if (vitals.heart_rate && (Number(vitals.heart_rate) < 20 || Number(vitals.heart_rate) > 300))
       errs.heart_rate = 'Must be 20–300 bpm';
@@ -83,27 +89,53 @@ function TriageForm({ appointmentId, onComplete }) {
 
     setLoading(true);
     try {
+      // Build payload — all symptom booleans explicitly set
       const payload = {
-        ...symptoms,
+        chest_pain:            !!symptoms.chest_pain,
+        difficulty_breathing:  !!symptoms.difficulty_breathing,
+        high_fever:            !!symptoms.high_fever,
+        severe_bleeding:       !!symptoms.severe_bleeding,
+        loss_of_consciousness: !!symptoms.loss_of_consciousness,
+        accident_trauma:       !!symptoms.accident_trauma,
+        stroke_symptoms:       !!symptoms.stroke_symptoms,
+        severe_abdominal_pain: !!symptoms.severe_abdominal_pain,
+        allergic_reaction:     !!symptoms.allergic_reaction,
         heart_rate:        vitals.heart_rate        ? parseInt(vitals.heart_rate)        : null,
         oxygen_saturation: vitals.oxygen_saturation ? parseInt(vitals.oxygen_saturation) : null,
         temperature:       vitals.temperature       ? parseFloat(vitals.temperature)     : null,
         pain_scale:        parseInt(vitals.pain_scale) || 0,
       };
+
       const res = await patientAPI.submitTriage(appointmentId, payload);
       setResult(res.data);
-      if (res.data.priority_level === 'critical') {
-        toast.error('🚨 CRITICAL — You have been moved to top of queue!', { duration: 6000 });
+
+      const lvl = res.data.priority_level;
+      const pos  = res.data.queue_position;
+      const wait = res.data.predicted_wait_minutes;
+
+      if (lvl === 'critical') {
+        toast.error(`🚨 CRITICAL! You are #${pos} in queue. Immediate attention needed!`, { duration: 8000 });
+      } else if (lvl === 'high') {
+        toast(`⚠️ HIGH Priority — Queue position #${pos}. Est. wait: ~${Math.round(wait || 0)} min`, { duration: 6000 });
+      } else if (lvl === 'medium') {
+        toast(`🟡 MEDIUM Priority — Queue position #${pos}. Est. wait: ~${Math.round(wait || 0)} min`, { duration: 5000 });
       } else {
-        toast.success('✅ Triage completed!');
+        toast.success(`✅ NORMAL Priority — Queue position #${pos}. Est. wait: ~${Math.round(wait || 0)} min`, { duration: 5000 });
       }
       onComplete && onComplete(res.data);
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Triage submission failed.');
+      const detail = err.response?.data?.detail;
+      if (detail) {
+        toast.error(`❌ ${detail}`);
+      } else {
+        toast.error('❌ Triage submission failed. Please try again.');
+      }
+      console.error('Triage error:', err);
     } finally {
       setLoading(false);
     }
   };
+
 
   const painLabels = ['No Pain 😐','Very Mild 😕','Mild 😟','Moderate 😣','Significant 😖',
     'Severe 😩','Very Severe 😰','Intense 😱','Very Intense 🤯','Unbearable 😭','Worst 💀'];
@@ -572,31 +604,68 @@ export default function PatientDashboard({ onUnreadChange }) {
   useEffect(() => {
     patientAPI.getAppointments().then(r => setAppointments(r.data));
 
-    const wsHost = window.location.hostname + ':8000';
-    const ws = new WebSocket(`ws://${wsHost}/ws/patient/${user.id}`);
+    // Always use hardcoded backend address — never rely on window.location
+    const ws = new WebSocket(`ws://127.0.0.1:8000/ws/patient/${user.id}`);
     wsRef.current = ws;
+
+    ws.onopen = () => console.log('[WS] Patient connected, user_id:', user.id);
 
     ws.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data);
+        console.log('[WS] Message received:', msg.type, msg);
+
         if (msg.type === 'your_turn') {
-          setQueueAlert({ type: 'your_turn', message: msg.message || "Doctor is ready for you!", wait_minutes: 0 });
+          // Only show if this appointment belongs to THIS patient
+          // (backend already sends to correct user_id via send_to_user)
+          setQueueAlert({ type: 'your_turn', message: 'The doctor is ready for you!', wait_minutes: 0 });
           playBeep('your_turn');
-          toast.success("🩺 It's Your Turn! Please go to the consultation room.", { duration: 10000 });
+          toast.success("🩺 IT'S YOUR TURN! Please go to the consultation room now.", {
+            duration: 12000,
+            style: { background: '#1b5e20', color: '#fff', fontWeight: 700, fontSize: '1rem' }
+          });
+          // Refresh appointments to show active status
+          patientAPI.getAppointments().then(r => setAppointments(r.data));
+
         } else if (msg.type === 'almost_your_turn') {
           setQueueAlert({ type: 'almost_your_turn', message: msg.message || "You're almost next!", wait_minutes: msg.wait_minutes });
           playBeep('almost');
-          toast(`⏰ You're Up Next! Get ready — ~${Math.round(msg.wait_minutes || 5)} min wait.`, { duration: 8000 });
+          toast(`⏰ You're UP NEXT! Be ready — ~${Math.round(msg.wait_minutes || 5)} min`, {
+            duration: 8000,
+            style: { background: '#e65100', color: '#fff', fontWeight: 600 }
+          });
+
+        } else if (msg.type === 'queue_update') {
+          // Silently refresh queue data — no banner
+          patientAPI.getAppointments().then(r => setAppointments(r.data));
+
+        } else if (msg.type === 'emergency_alert') {
+          // Show emergency alert only if this patient is the one being alerted
+          if (msg.patient_id === user.id) {
+            toast.error(`🚨 CRITICAL alert confirmed for you!`, { duration: 8000 });
+          }
         }
       } catch {}
     };
+
+    ws.onerror = () => console.log('[WS] Connection error');
+    ws.onclose = () => console.log('[WS] Disconnected');
 
     const ping = setInterval(() => ws.readyState === 1 && ws.send('ping'), 25000);
     return () => { clearInterval(ping); ws.close(); };
   }, [user.id]);
 
+
   const activeAppointments = appointments.filter(a => ['scheduled', 'active'].includes(a.status));
-  const latestActive = activeAppointments[0];
+  // Sort: active first, then by most recent appointment_time
+  const sortedActive = [...activeAppointments].sort((a, b) => {
+    if (a.status === 'active' && b.status !== 'active') return -1;
+    if (b.status === 'active' && a.status !== 'active') return 1;
+    return new Date(b.appointment_time) - new Date(a.appointment_time);
+  });
+  const latestActive = sortedActive[0];
+  // For triage: use any scheduled/active — even if none, pick most recent overall
+  const triageAppt = latestActive || appointments.find(a => a.status === 'scheduled');
 
   const sidebar = [
     { id: 'overview', label: 'Overview', icon: '📊' },
@@ -745,13 +814,40 @@ export default function PatientDashboard({ onUnreadChange }) {
               <h1>🚨 Emergency Triage</h1>
               <p>Complete this assessment to get your emergency priority assigned</p>
             </div>
-            {latestActive ? (
-              <TriageForm appointmentId={latestActive.id} onComplete={() => patientAPI.getAppointments().then(r => setAppointments(r.data))} />
+            {triageAppt ? (
+              <>
+                {/* Appointment selector if multiple scheduled */}
+                {activeAppointments.length > 1 && (
+                  <div className="card mb-md" style={{ padding: '12px 16px', display:'flex', alignItems:'center', gap:12 }}>
+                    <span style={{ fontSize:'0.82rem', color:'var(--text-muted)', whiteSpace:'nowrap' }}>📅 Appointment:</span>
+                    <select
+                      className="form-select"
+                      style={{ flex:1, padding:'6px 10px', fontSize:'0.85rem' }}
+                      value={triageAppt.id}
+                      onChange={e => {
+                        const chosen = activeAppointments.find(a => a.id === parseInt(e.target.value));
+                        if (chosen) setAppointments(prev => [chosen, ...prev.filter(a => a.id !== chosen.id)]);
+                      }}
+                    >
+                      {activeAppointments.map(a => (
+                        <option key={a.id} value={a.id}>
+                          #{a.id} — {a.doctor_name || `Doctor #${a.doctor_id}`} — {new Date(a.appointment_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} ({a.status})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <TriageForm
+                  appointmentId={triageAppt.id}
+                  onComplete={() => patientAPI.getAppointments().then(r => setAppointments(r.data))}
+                />
+              </>
             ) : (
               <div className="empty-state">
                 <div className="empty-icon">🚑</div>
-                <p>Please book an appointment first</p>
-                <button className="btn btn-primary mt-md" onClick={() => setActiveTab('book')}>Book Appointment</button>
+                <h3>No Appointment Found</h3>
+                <p>Please book an appointment first before submitting triage</p>
+                <button className="btn btn-primary mt-md" onClick={() => setActiveTab('book')}>📅 Book Appointment</button>
               </div>
             )}
           </div>

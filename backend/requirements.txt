@@ -5,6 +5,7 @@ pydantic==2.7.1
 pydantic[email]
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+bcrypt==3.2.2
 python-multipart==0.0.9
 scikit-learn==1.4.2
 xgboost==2.0.3

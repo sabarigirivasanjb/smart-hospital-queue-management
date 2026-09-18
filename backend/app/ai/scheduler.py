@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from .. import models
 from ..schemas import SlotRecommendation
 from .wait_time_model import wait_time_predictor
+from ..utils.time import local_day_bounds_utc
 
 
 def recommend_slots(
@@ -47,8 +48,7 @@ def recommend_slots(
 
     for doctor in doctors:
         # Count active/scheduled appointments today for this doctor
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        today_end = today_start + timedelta(days=1)
+        today_start, today_end = local_day_bounds_utc()
 
         queue_count = (
             db.query(models.Appointment)
