@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # 🏥 SmartQueue — AI-Powered Hospital Queue Management System
 
 > An intelligent hospital queue management system with real-time triage prioritization, IoT-based vitals monitoring, SMS notifications, and multilingual support.
@@ -171,3 +172,6 @@ Admin    → Login → View Analytics → Manage Departments/Doctors
 ## 📄 License
 
 MIT License — Free to use for academic and educational purposes.
+=======
+# smart-hospital-queue-management
+>>>>>>> 97ad1c825cd45dbc2a97abe071a0e55bfc1ee5c3
