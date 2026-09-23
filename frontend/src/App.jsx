@@ -7,6 +7,7 @@ import Login from './pages/Login';
 import PatientDashboard from './pages/PatientDashboard';
 import DoctorDashboard from './pages/DoctorDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import ReceptionDashboard from './pages/ReceptionDashboard';
 import './index.css';
 
 function ProtectedRoute({ children, allowedRole }) {
@@ -42,6 +43,12 @@ function AppContent() {
           <Route path="/admin" element={
             <ProtectedRoute allowedRole="admin">
               <AdminDashboard />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/reception" element={
+            <ProtectedRoute allowedRole="reception">
+              <ReceptionDashboard />
             </ProtectedRoute>
           } />
 

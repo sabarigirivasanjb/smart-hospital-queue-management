@@ -124,7 +124,22 @@ def seed_database(db: Session):
     db.commit()
     print(f"[Seed] Created {len(PATIENT_DATA)} demo patients (password: Patient@123)")
 
-    # 5. Create some sample appointments for today
+    # 5. Create reception staff user
+    reception_email = "reception@hospital.com"
+    if not db.query(models.User).filter(models.User.email == reception_email).first():
+        reception_user = models.User(
+            email=reception_email,
+            password_hash=hash_password("Reception@123"),
+            full_name="Reception Staff",
+            phone="9876543210",
+            role=models.UserRole.reception,
+            is_active=True,
+        )
+        db.add(reception_user)
+        db.commit()
+        print("[SEED] Reception staff created")
+
+    # 6. Create some sample appointments for today
     patients = db.query(models.User).filter(models.User.role == models.UserRole.patient).all()
     doctors = db.query(models.Doctor).all()
     now = datetime.now(timezone.utc)

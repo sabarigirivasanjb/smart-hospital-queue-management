@@ -6,9 +6,10 @@ import toast from 'react-hot-toast';
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
 const DEMO_ACCOUNTS = [
-  { role: 'admin',   icon: '🛡️', label: 'Admin',   email: 'admin@hospital.com',         password: 'Admin@123' },
-  { role: 'doctor',  icon: '👨‍⚕️', label: 'Doctor',  email: 'arjun.ramesh@hospital.com',   password: 'Doctor@123' },
-  { role: 'patient', icon: '🏥', label: 'Patient',  email: 'rahul.gupta@email.com',       password: 'Patient@123' },
+  { role: 'admin',     icon: '🛡️', label: 'Admin',     email: 'admin@hospital.com',         password: 'Admin@123' },
+  { role: 'doctor',    icon: '👨‍⚕️', label: 'Doctor',    email: 'arjun.ramesh@hospital.com', password: 'Doctor@123' },
+  { role: 'reception', icon: '📋', label: 'Reception', email: 'reception@hospital.com',     password: 'Reception@123' },
+  { role: 'patient',   icon: '🏥', label: 'Patient',   email: 'rahul.gupta@email.com',     password: 'Patient@123' },
 ];
 
 export default function Login() {
@@ -283,6 +284,7 @@ export default function Login() {
                   style={{ ...inputStyle('role'), cursor: 'pointer' }}>
                   <option value="patient">🏥 Patient</option>
                   <option value="doctor">👨‍⚕️ Doctor</option>
+                  <option value="reception">📋 Reception</option>
                   <option value="admin">🛡️ Admin</option>
                 </select>
               </div>

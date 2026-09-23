@@ -12,6 +12,7 @@ class UserRole(str, enum.Enum):
     patient = "patient"
     doctor = "doctor"
     admin = "admin"
+    reception = "reception"
 
 
 class PriorityLevel(str, enum.Enum):
@@ -214,3 +215,16 @@ class Feedback(Base):
     # Relationships
     patient = relationship("User", foreign_keys=[patient_id])
     doctor = relationship("Doctor", foreign_keys=[doctor_id])
+
+
+class CheckIn(Base):
+    __tablename__ = "checkins"
+
+    id = Column(Integer, primary_key=True, index=True)
+    appointment_id = Column(Integer, ForeignKey("appointments.id"), nullable=False)
+    patient_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    checked_in_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # reception staff user id
+    checked_in_at = Column(DateTime(timezone=True), server_default=func.now())
+    checked_out_at = Column(DateTime(timezone=True), nullable=True)
+    status = Column(String, default="checked_in")  # checked_in, checked_out
+    notes = Column(Text, nullable=True)

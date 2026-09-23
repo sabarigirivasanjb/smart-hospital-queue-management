@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from .database import engine, get_db
 from . import models
-from .routers import auth, patients, doctors, admins, billing, feedback
+from .routers import auth, patients, doctors, admins, billing, feedback, reception
 from .utils.websocket import ws_manager
 from .seed import seed_database
 
@@ -65,6 +65,7 @@ app.include_router(doctors.router, prefix="/api/v1")
 app.include_router(admins.router, prefix="/api/v1")
 app.include_router(billing.router, prefix="/api/v1")
 app.include_router(feedback.router, prefix="/api/v1")
+app.include_router(reception.router, prefix="/api/v1")
 
 
 # ── REST: public endpoints ─────────────────────────────────────────────────────

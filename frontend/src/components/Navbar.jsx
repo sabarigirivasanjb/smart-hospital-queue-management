@@ -18,7 +18,7 @@ export default function Navbar({ unreadCount = 0 }) {
           SmartQueue
           {user && (
             <span className={`navbar-role-badge ${user.role}`}>
-              {user.role === 'patient' ? '🏥' : user.role === 'doctor' ? '🩺' : '⚙️'} {user.role}
+              {user.role === 'patient' ? '🏥' : user.role === 'doctor' ? '🩺' : user.role === 'reception' ? '📋' : '⚙️'} {user.role}
             </span>
           )}
         </a>

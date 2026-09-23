@@ -58,16 +58,16 @@ export const doctorAPI = {
 };
 
 export const adminAPI = {
-  getDashboard:       ()       => api.get('/admin/dashboard'),
-  getQueueOverview:   ()       => api.get('/admin/queue-overview'),
-  getDepartments:     ()       => api.get('/admin/departments'),
-  createDepartment:   (data)   => api.post('/admin/departments', data),
-  toggleDepartment:   (id)     => api.patch(`/admin/departments/${id}/toggle`),
-  updateDepartment:   (id,data)=> api.patch(`/admin/departments/${id}`, data),
-  getDoctors:         ()       => api.get('/admin/doctors'),
-  addDoctor:          (data)   => api.post('/admin/doctors', data),
-  getPatients:        ()       => api.get('/admin/patients'),
-  getEmergencyAlerts: ()       => api.get('/admin/emergency-alerts'),
+  getDashboard:       ()        => api.get('/admin/dashboard'),
+  getQueueOverview:   ()        => api.get('/admin/queue-overview'),
+  getDepartments:     ()        => api.get('/admin/departments'),
+  createDepartment:   (data)    => api.post('/admin/departments', data),
+  toggleDepartment:   (id)      => api.patch(`/admin/departments/${id}/toggle`),
+  updateDepartment:   (id, data)=> api.patch(`/admin/departments/${id}`, data),
+  getDoctors:         ()        => api.get('/admin/doctors'),
+  addDoctor:          (data)    => api.post('/admin/doctors', data),
+  getPatients:        ()        => api.get('/admin/patients'),
+  getEmergencyAlerts: ()        => api.get('/admin/emergency-alerts'),
 };
 
 export const publicAPI = {
@@ -87,6 +87,18 @@ export const feedbackAPI = {
   submit:         (data) => api.post('/feedback/submit', data),
   doctorFeedback: (id)   => api.get(`/feedback/doctor/${id}`),
   myFeedback:     ()     => api.get('/feedback/my-feedback'),
+};
+
+export const receptionAPI = {
+  getDashboard:    ()         => api.get('/reception/dashboard'),
+  getAppointments: (search)   => api.get('/reception/appointments', search ? { params: { search } } : {}),
+  checkin:         (id)       => api.post(`/reception/checkin/${id}`),
+  checkout:        (id)       => api.post(`/reception/checkout/${id}`),
+  getQueue:        ()         => api.get('/reception/queue'),
+  getBills:        (params)   => api.get('/reception/bills', { params }),
+  collectPayment:  (id, data) => api.put(`/reception/bills/${id}/collect`, data),
+  getReceipt:      (id)       => api.get(`/reception/bills/${id}/receipt`),
+  getReports:      (date)     => api.get('/reception/reports', date ? { params: { date } } : {}),
 };
 
 export default api;
