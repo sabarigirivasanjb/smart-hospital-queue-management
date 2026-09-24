@@ -66,6 +66,9 @@ export const adminAPI = {
   updateDepartment:   (id, data)=> api.patch(`/admin/departments/${id}`, data),
   getDoctors:         ()        => api.get('/admin/doctors'),
   addDoctor:          (data)    => api.post('/admin/doctors', data),
+  createDoctor:       (data)    => api.post('/admin/doctors/create', data),
+  getReceptionists:   ()        => api.get('/admin/receptionists'),
+  createReceptionist: (data)    => api.post('/admin/receptionists', data),
   getPatients:        ()        => api.get('/admin/patients'),
   getEmergencyAlerts: ()        => api.get('/admin/emergency-alerts'),
 };

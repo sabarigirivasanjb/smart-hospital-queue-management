@@ -283,9 +283,6 @@ export default function Login() {
                 <select value={form.role} onChange={e => set('role', e.target.value)}
                   style={{ ...inputStyle('role'), cursor: 'pointer' }}>
                   <option value="patient">🏥 Patient</option>
-                  <option value="doctor">👨‍⚕️ Doctor</option>
-                  <option value="reception">📋 Reception</option>
-                  <option value="admin">🛡️ Admin</option>
                 </select>
               </div>
             </div>

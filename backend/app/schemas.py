@@ -10,6 +10,7 @@ class UserRole(str, Enum):
     patient = "patient"
     doctor = "doctor"
     admin = "admin"
+    reception = "reception"
 
 
 class PriorityLevel(str, Enum):
@@ -37,6 +38,46 @@ class UserCreate(BaseModel):
     role: UserRole = UserRole.patient
     age: Optional[int] = None
     blood_group: Optional[str] = None
+
+
+class StaffCredentialResponse(BaseModel):
+    id: int
+    full_name: str
+    email: str
+    role: str
+    generated_password: str
+
+
+class DoctorStaffCreate(BaseModel):
+    full_name: str
+    email: EmailStr
+    phone: Optional[str] = None
+    department_id: int
+    specialization: Optional[str] = None
+    experience_years: int = 0
+    max_daily_patients: int = 30
+    avg_consultation_minutes: float = 15.0
+    password: Optional[str] = None
+
+
+class ReceptionistCreate(BaseModel):
+    full_name: str
+    email: EmailStr
+    phone: Optional[str] = None
+    password: Optional[str] = None
+
+
+class ReceptionistOut(BaseModel):
+    id: int
+    full_name: str
+    email: str
+    phone: Optional[str]
+    role: str
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 class UserLogin(BaseModel):

@@ -96,6 +96,7 @@ function AddDoctorForm({ onAdded }) {
   });
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [generatedCredentials, setGeneratedCredentials] = useState(null);
 
   useEffect(() => {
     adminAPI.getDepartments().then(r => setDepartments(r.data));
@@ -105,20 +106,10 @@ function AddDoctorForm({ onAdded }) {
     e.preventDefault();
     setLoading(true);
     try {
-      // First register as doctor user
-      const { authAPI } = await import('../api');
-      const userRes = await import('../api').then(m => m.authAPI.register({
-        email: form.email,
-        password: 'Doctor@123',
+      const res = await adminAPI.createDoctor({
         full_name: form.full_name,
+        email: form.email,
         phone: form.phone,
-        role: 'doctor',
-      }));
-      const userId = userRes.data.user_id;
-
-      // Then create doctor profile
-      await adminAPI.addDoctor({
-        user_id: userId,
         department_id: parseInt(form.department_id),
         specialization: form.specialization,
         experience_years: parseInt(form.experience_years) || 0,
@@ -126,7 +117,14 @@ function AddDoctorForm({ onAdded }) {
         avg_consultation_minutes: parseFloat(form.avg_consultation_minutes),
       });
 
-      toast.success(`Dr. ${form.full_name} added successfully!`);
+      setGeneratedCredentials({
+        full_name: res.data.full_name,
+        email: res.data.email,
+        password: res.data.generated_password,
+        role: res.data.role,
+      });
+
+      toast.success(`Doctor account created for ${form.full_name}!`);
       onAdded && onAdded();
       setForm({ full_name: '', email: '', phone: '', department_id: '', specialization: '', experience_years: '', max_daily_patients: 30, avg_consultation_minutes: 15 });
     } catch (err) {
@@ -183,6 +181,89 @@ function AddDoctorForm({ onAdded }) {
           </button>
         </div>
       </form>
+
+      {generatedCredentials && (
+        <div className="card" style={{ marginTop: '1rem', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.35)' }}>
+          <h4>✅ Generated Credentials</h4>
+          <div style={{ display: 'grid', gap: 6, marginTop: 10 }}>
+            <div><strong>Name:</strong> {generatedCredentials.full_name}</div>
+            <div><strong>Email:</strong> {generatedCredentials.email}</div>
+            <div><strong>Password:</strong> {generatedCredentials.password}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Add Receptionist Form ──────────────────────────────────────────────────────
+function AddReceptionistForm({ onAdded }) {
+  const [form, setForm] = useState({ full_name: '', email: '', phone: '' });
+  const [loading, setLoading] = useState(false);
+  const [generatedCredentials, setGeneratedCredentials] = useState(null);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await adminAPI.createReceptionist({
+        full_name: form.full_name,
+        email: form.email,
+        phone: form.phone,
+      });
+
+      setGeneratedCredentials({
+        full_name: res.data.full_name,
+        email: res.data.email,
+        password: res.data.generated_password,
+        role: res.data.role,
+      });
+
+      toast.success(`Receptionist account created for ${form.full_name}!`);
+      onAdded && onAdded();
+      setForm({ full_name: '', email: '', phone: '' });
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to add receptionist');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const update = (key) => (e) => setForm(f => ({ ...f, [key]: e.target.value }));
+
+  return (
+    <div className="card" style={{ marginTop: '1.25rem' }}>
+      <h3 className="mb-lg">📋 Add New Receptionist</h3>
+      <form className="form-grid" onSubmit={handleSubmit}>
+        <div className="form-group">
+          <label className="form-label">Full Name</label>
+          <input className="form-input" placeholder="Reception Staff Name" value={form.full_name} onChange={update('full_name')} required />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Email</label>
+          <input type="email" className="form-input" placeholder="reception@hospital.com" value={form.email} onChange={update('email')} required />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Phone</label>
+          <input className="form-input" placeholder="Phone number" value={form.phone} onChange={update('phone')} />
+        </div>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <button type="submit" className="btn btn-primary" disabled={loading}>
+            {loading ? <span className="loading-spinner" /> : '➕'} Add Receptionist
+          </button>
+        </div>
+      </form>
+
+      {generatedCredentials && (
+        <div className="card" style={{ marginTop: '1rem', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.35)' }}>
+          <h4>✅ Generated Credentials</h4>
+          <div style={{ display: 'grid', gap: 6, marginTop: 10 }}>
+            <div><strong>Name:</strong> {generatedCredentials.full_name}</div>
+            <div><strong>Email:</strong> {generatedCredentials.email}</div>
+            <div><strong>Password:</strong> {generatedCredentials.password}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -377,6 +458,7 @@ export default function AdminDashboard() {
     { id: 'queue', label: 'Queue Monitor', icon: '📍' },
     { id: 'emergency', label: 'Emergency Alerts', icon: '🚨' },
     { id: 'doctors', label: 'Manage Doctors', icon: '🩺' },
+    { id: 'receptionists', label: 'Manage Receptionists', icon: '📋' },
     { id: 'departments', label: 'Departments', icon: '🏢' },
   ];
 
@@ -623,6 +705,13 @@ export default function AdminDashboard() {
           <div className="animate-fade-up">
             <div className="page-header"><h1>🩺 Manage Doctors</h1></div>
             <AddDoctorForm onAdded={fetchAll} />
+          </div>
+        )}
+
+        {!loading && activeTab === 'receptionists' && (
+          <div className="animate-fade-up">
+            <div className="page-header"><h1>📋 Manage Receptionists</h1></div>
+            <AddReceptionistForm onAdded={fetchAll} />
           </div>
         )}
 

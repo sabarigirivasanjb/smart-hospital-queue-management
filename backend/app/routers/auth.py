@@ -11,7 +11,10 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    """Register a new user (patient, doctor, or admin)."""
+    """Register a public patient account only. Doctor and receptionist accounts are created by admin."""
+    if user_data.role != models.UserRole.patient:
+        raise HTTPException(status_code=403, detail="Public registration is only allowed for patients.")
+
     existing = db.query(models.User).filter(models.User.email == user_data.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -21,7 +24,7 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
         password_hash=hash_password(user_data.password),
         full_name=user_data.full_name,
         phone=user_data.phone,
-        role=user_data.role,
+        role=models.UserRole.patient,
         age=user_data.age,
         blood_group=user_data.blood_group,
     )

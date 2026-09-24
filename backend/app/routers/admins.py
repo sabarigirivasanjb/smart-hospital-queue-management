@@ -1,3 +1,5 @@
+import secrets
+import string
 from datetime import datetime, timezone, timedelta
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -8,9 +10,16 @@ from ..database import get_db
 from .. import models
 from ..schemas import (
     DepartmentCreate, DepartmentOut, DoctorCreate, DoctorOut,
-    QueueStateOut, HospitalAnalytics, DepartmentStats, UserCreate
+    QueueStateOut, HospitalAnalytics, DepartmentStats, UserCreate,
+    DoctorStaffCreate, ReceptionistCreate, StaffCredentialResponse,
+    ReceptionistOut
 )
 from ..auth import require_role, hash_password
+
+
+def _generate_staff_password(role_name: str) -> str:
+    suffix = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(4))
+    return f"{role_name}@{suffix}"
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -185,13 +194,71 @@ def list_doctors(
     return db.query(models.Doctor).all()
 
 
+@router.post("/doctors/create", response_model=StaffCredentialResponse, status_code=201)
+def create_doctor_account(
+    doctor_data: DoctorStaffCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_role("admin")),
+):
+    """Create a doctor user and profile from the admin portal."""
+    email = doctor_data.email.lower().strip()
+    if db.query(models.User).filter(models.User.email == email).first():
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    dept = db.query(models.Department).filter(models.Department.id == doctor_data.department_id).first()
+    if not dept:
+        raise HTTPException(status_code=404, detail="Department not found")
+
+    generated_password = doctor_data.password or _generate_staff_password("Doctor")
+
+    user = models.User(
+        email=email,
+        password_hash=hash_password(generated_password),
+        full_name=doctor_data.full_name,
+        phone=doctor_data.phone,
+        role=models.UserRole.doctor,
+    )
+    db.add(user)
+    db.flush()
+
+    doctor = models.Doctor(
+        user_id=user.id,
+        department_id=doctor_data.department_id,
+        specialization=doctor_data.specialization,
+        max_daily_patients=doctor_data.max_daily_patients,
+        avg_consultation_minutes=doctor_data.avg_consultation_minutes,
+        experience_years=doctor_data.experience_years,
+        is_available=True,
+    )
+    db.add(doctor)
+    db.flush()
+
+    queue_state = models.QueueState(
+        department_id=doctor_data.department_id,
+        doctor_id=doctor.id,
+        waiting_count=0,
+        avg_wait_time_predicted=0.0,
+        is_active=True,
+    )
+    db.add(queue_state)
+    db.commit()
+
+    return StaffCredentialResponse(
+        id=user.id,
+        full_name=user.full_name,
+        email=user.email,
+        role="doctor",
+        generated_password=generated_password,
+    )
+
+
 @router.post("/doctors", response_model=DoctorOut, status_code=201)
 def add_doctor(
     doctor_data: DoctorCreate,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_role("admin")),
 ):
-    """Assign a user with role=doctor to a doctor profile."""
+    """Backward-compatible admin doctor profile assignment."""
     user = db.query(models.User).filter(
         models.User.id == doctor_data.user_id,
         models.User.role == models.UserRole.doctor,
@@ -213,29 +280,59 @@ def add_doctor(
 
     doctor = models.Doctor(**doctor_data.model_dump())
     db.add(doctor)
+    db.flush()
 
-    # Create initial queue state for this doctor
-    queue_state = models.QueueState(
-        department_id=doctor_data.department_id,
-        doctor_id=doctor.id if hasattr(doctor, 'id') else 0,
-        waiting_count=0,
-        avg_wait_time_predicted=0.0,
-    )
-    db.add(doctor)
-    db.commit()
-    db.refresh(doctor)
-
-    # Create queue state after doctor is persisted
     qs = models.QueueState(
         department_id=doctor.department_id,
         doctor_id=doctor.id,
         waiting_count=0,
         avg_wait_time_predicted=0.0,
+        is_active=True,
     )
     db.add(qs)
     db.commit()
     db.refresh(doctor)
     return doctor
+
+
+@router.get("/receptionists", response_model=List[ReceptionistOut])
+def list_receptionists(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_role("admin")),
+):
+    return db.query(models.User).filter(models.User.role == models.UserRole.reception).all()
+
+
+@router.post("/receptionists", response_model=StaffCredentialResponse, status_code=201)
+def create_receptionist_account(
+    receptionist_data: ReceptionistCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_role("admin")),
+):
+    """Create a receptionist account from the admin portal."""
+    email = receptionist_data.email.lower().strip()
+    if db.query(models.User).filter(models.User.email == email).first():
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    generated_password = receptionist_data.password or _generate_staff_password("Reception")
+    user = models.User(
+        email=email,
+        password_hash=hash_password(generated_password),
+        full_name=receptionist_data.full_name,
+        phone=receptionist_data.phone,
+        role=models.UserRole.reception,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return StaffCredentialResponse(
+        id=user.id,
+        full_name=user.full_name,
+        email=user.email,
+        role="reception",
+        generated_password=generated_password,
+    )
 
 
 @router.get("/patients", response_model=List)
