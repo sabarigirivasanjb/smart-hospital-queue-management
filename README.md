@@ -192,6 +192,10 @@ flowchart TB
         SMS --> Patient
 ```
 
+### Architecture Screenshot
+
+![SmartQueue Hospital Architecture](architecture-diagram.png)
+
 ---
 
 ## 📊 Demo Flow
