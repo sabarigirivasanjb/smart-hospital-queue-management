@@ -155,30 +155,76 @@ TWILIO_PHONE_NUMBER=+1234567890
 
 ## 🏗️ Architecture
 
-```
-Patient/Doctor/Admin
-        │
-   React Frontend (5173)
-        │ HTTP Axios / WebSocket
-   FastAPI Backend (8000)
-        │
-    ┌───┴───┐
-    │       │
- SQLite   Twilio SMS
-   DB      API
+```mermaid
+flowchart TB
+        subgraph Portals[React portals - Vite on port 5173]
+                Patient[Patient portal]
+                Reception[Reception portal]
+                Doctor[Doctor portal]
+                Admin[Admin portal]
+        end
+
+        subgraph Services[FastAPI services - port 8000]
+                Auth[JWT authentication and role checks]
+                Queue[Appointments and live queue]
+                Triage[AI triage and wait-time prediction]
+                Billing[Billing and payment receipts]
+                Staff[Staff, department, and analytics management]
+        end
+
+        DB[(SQLite + SQLAlchemy)]
+        WS[WebSocket queue updates]
+        SMS[Twilio-compatible SMS service]
+
+        Patient -->|Register, login, book, vitals| Auth
+        Reception -->|Check-in, queue, checkout, billing| Auth
+        Doctor -->|Schedule, call next, consultation| Auth
+        Admin -->|Staff, departments, reports| Auth
+        Auth --> Queue
+        Queue --> Triage
+        Queue --> DB
+        Triage --> DB
+        Billing --> DB
+        Staff --> DB
+        Queue --> WS
+        Queue --> SMS
+        WS --> Patient
+        SMS --> Patient
 ```
 
 ---
 
 ## 📊 Demo Flow
 
-```
-Patient  → Login → Book Appointment → Triage (enter vitals)
-        → AI assigns priority → Join Queue
-Doctor   → Login → See Queue → Click "Call Next"
-        → SMS sent to patient → Patient gets screen alert
-Admin    → Login → View Analytics → Manage Departments/Doctors
-```
+### 1. Patient registration and booking
+
+1. Open the login page and select **Register**.
+2. Create a patient account with name, email, password, and optional health details.
+3. Sign in automatically and choose a department, doctor, and appointment slot.
+4. Submit symptoms and vitals for AI triage.
+5. The system calculates priority and predicted wait time, then adds the appointment to the queue.
+
+### 2. Reception desk workflow
+
+1. Sign in with the reception account.
+2. Search for the appointment or patient and confirm check-in.
+3. Monitor the live queue and current consultation status.
+4. After the consultation, confirm checkout and open the generated bill.
+5. Collect cash, UPI, or card payment and print/download the receipt.
+
+### 3. Doctor consultation workflow
+
+1. Sign in to the doctor portal and review today's queue.
+2. Select **Call Next** to move the highest-priority eligible patient into consultation.
+3. The patient receives a queue update and optional SMS notification.
+4. Complete or reject the appointment with the consultation outcome.
+
+### 4. Admin management workflow
+
+1. Sign in to the admin portal.
+2. Create departments, doctor accounts, and reception accounts.
+3. Review queue activity, emergency alerts, staff availability, and analytics.
+4. Manage the hospital configuration without exposing staff roles to public registration.
 
 ---
 
