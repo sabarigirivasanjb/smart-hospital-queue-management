@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # 🏥 SmartQueue — AI-Powered Hospital Queue Management System
 
 > An intelligent hospital queue management system with real-time triage prioritization, IoT-based vitals monitoring, SMS notifications, and multilingual support.
@@ -17,7 +16,27 @@
 | 💳 **Bill Generation** | Consultation + Lab + Medicine charges |
 | ⭐ **Patient Feedback** | Star rating after appointment |
 | 🌐 **Tamil Language** | Full Tamil + English UI support |
-| 🛡️ **Role-Based Auth** | Patient / Doctor / Admin dashboards |
+| 🛡️ **Role-Based Auth** | Patient / Doctor / Reception / Admin dashboards |
+
+## Registration and Staff Accounts
+
+Public registration creates **patient accounts only**. Doctor and reception accounts are created by an admin so staff permissions cannot be self-assigned. Use the **Register** tab on the login page to create a patient account; successful registration signs the patient in and opens the patient dashboard.
+
+## Portal Diagram
+
+```mermaid
+flowchart LR
+        Patient[Patient portal\nRegister / Login\nBook appointment / Triage] -->|JWT + REST| API[FastAPI API]
+        Reception[Reception portal\nCheck-in / Queue / Billing] -->|JWT + REST| API
+        Doctor[Doctor portal\nCall next / Consultation] -->|JWT + REST| API
+        Admin[Admin portal\nStaff / Departments / Analytics] -->|JWT + REST| API
+        API --> DB[(SQLite database)]
+        API --> AI[AI triage + wait-time models]
+        API --> WS[WebSocket queue updates]
+        API --> SMS[SMS service]
+        WS --> Patient
+        SMS --> Patient
+```
 
 ---
 
@@ -113,6 +132,7 @@ http://127.0.0.1:5173
 |------|-------|----------|
 | Admin | admin@hospital.com | Admin@123 |
 | Doctor | arjun.ramesh@hospital.com | Doctor@123 |
+| Reception | reception@hospital.com | Reception@123 |
 | Patient | rahul.gupta@email.com | Patient@123 |
 
 ---
@@ -172,6 +192,3 @@ Admin    → Login → View Analytics → Manage Departments/Doctors
 ## 📄 License
 
 MIT License — Free to use for academic and educational purposes.
-=======
-# smart-hospital-queue-management
->>>>>>> 97ad1c825cd45dbc2a97abe071a0e55bfc1ee5c3

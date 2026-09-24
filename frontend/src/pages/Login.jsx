@@ -268,8 +268,8 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Blood Group + Role */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            {/* Blood Group */}
+            <div>
               <div>
                 <label style={labelStyle}>BLOOD GROUP</label>
                 <select value={form.blood_group} onChange={e => set('blood_group', e.target.value)}
@@ -278,12 +278,8 @@ export default function Login() {
                   {BLOOD_GROUPS.map(b => <option key={b} value={b}>{b}</option>)}
                 </select>
               </div>
-              <div>
-                <label style={labelStyle}>REGISTER AS</label>
-                <select value={form.role} onChange={e => set('role', e.target.value)}
-                  style={{ ...inputStyle('role'), cursor: 'pointer' }}>
-                  <option value="patient">🏥 Patient</option>
-                </select>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 6 }}>
+                New accounts are registered as patients. Doctor and reception accounts are created by an admin.
               </div>
             </div>
 
